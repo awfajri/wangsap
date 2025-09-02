@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aplikasi Obrolan Enkripsi Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="shortcut icon" href="/WhatsApp.svg.webp" type="image/x-icon">
+  </head>
+  <body class="p-8">
+    <div class="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-xl">
+      <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">
+        wangsappp kelompok 3
+      </h1>
+
+      <div class="info-box p-4 mb-6 text-sm text-center">
+        <p>
+          <strong>ID Anda:</strong> <span id="userIdDisplay">Memuat...</span>
+        </p>
+        <p><strong>Algoritma:</strong> AES</p>
+        <p class="mt-2">
+          Kalo pengen chattan, tukeran id dulu yaaaaa. gunanya buat bikin kunci obrolan.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-6">
+        <!-- Riwayat Obrolan -->
+        <div class="chat-box" id="chatHistory">
+          <!-- Pesan akan ditampilkan di sini -->
+        </div>
+
+        <!-- Kontrol Pesan -->
+        <div class="bg-gray-100 p-4 rounded-xl shadow-inner">
+          <div class="flex flex-col sm:flex-row items-center gap-4 mb-4">
+            <div class="w-full sm:w-1/2">
+              <label for="peerIdInput" class="text-sm font-medium text-gray-600"
+                >ID babaturan:</label
+              >
+              <input
+                type="text"
+                id="peerIdInput"
+                class="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                placeholder="Masukkan ID teman"
+              />
+            </div>
+            <div class="w-full sm:w-1/2">
+              <label
+                for="algorithmSelect"
+                class="text-sm font-medium text-gray-600"
+                >Pilih Algoritma:</label
+              >
+              <select
+                id="algorithmSelect"
+                class="w-full mt-1 p-2 border border-gray-300 rounded-md"
+              >
+                <option value="AES">AES</option>
+                <option value="DES">DES (Tidak Aman)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <input
+              type="text"
+              id="messageInput"
+              class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ketik pesan..."
+            />
+            <button
+              id="sendMessageBtn"
+              class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold whitespace-nowrap hover:bg-blue-700 transition-colors"
+            >
+              Kirim
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <script type="module" src="app.js"></script>
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
