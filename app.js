@@ -39,9 +39,24 @@ const algorithmSelect = document.getElementById("algorithmSelect");
 const messageInput = document.getElementById("messageInput");
 const sendMessageBtn = document.getElementById("sendMessageBtn");
 const chatHistory = document.getElementById("chatHistory");
+const authFormContainer = document.getElementById("authFormContainer");
+const registerForm = document.getElementById("registerForm");
+const regUsernameInput = document.getElementById("regUsernameInput");
+const regPasswordInput = document.getElementById("regPasswordInput");
+const regError = document.getElementById("regError");
+const loginForm = document.getElementById("loginForm");
+const loginUsernameInput = document.getElementById("loginUsernameInput");
+const loginPasswordInput = document.getElementById("loginPasswordInput");
+const loginError = document.getElementById("loginError");
+const toLoginBtn = document.getElementById("toLoginBtn");
+const toRegisterBtn = document.getElementById("toRegisterBtn");
+const mainChatUI = document.getElementById("mainChatUI");
+
+let currentUsername = localStorage.getItem("chatUsername") || null;
+let isUsernameReady = false;
+let currentUserPassword = null;
 
 let sharedSecretKey = "";
-let currentUserId = null;
 let chatCollection = null;
 
 function generateRandomKey(length) {
@@ -137,16 +152,170 @@ function decryptMessage(encryptedMessage, key) {
   }
 }
 
+function showRegisterForm() {
+  registerForm.style.display = "flex";
+  loginForm.style.display = "none";
+}
+function showLoginForm() {
+  registerForm.style.display = "none";
+  loginForm.style.display = "flex";
+}
+function showMainChatUI() {
+  authFormContainer.style.display = "none";
+  mainChatUI.style.display = "block";
+}
+function setUsername(username, password) {
+  currentUsername = username;
+  currentUserPassword = password;
+  localStorage.setItem("chatUsername", username);
+  localStorage.setItem("chatPassword", password);
+  userIdDisplay.textContent = username;
+  showMainChatUI();
+  isUsernameReady = true;
+}
+
+// Switch form
+toLoginBtn.addEventListener("click", showLoginForm);
+toRegisterBtn.addEventListener("click", showRegisterForm);
+
+// Registrasi
+registerForm.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  const username = regUsernameInput.value.trim();
+  const password = regPasswordInput.value.trim();
+  if (!username.match(/^[a-zA-Z0-9]{3,20}$/) || !password.match(/^.{4,20}$/)) {
+    regError.textContent =
+      "Username 3-20 huruf/angka, password minimal 4 karakter.";
+    regError.style.display = "block";
+    return;
+  }
+  regError.style.display = "none";
+  // Cek ke Firestore apakah username sudah dipakai
+  const userDoc = doc(db, "users", username);
+  const userSnap = await getDoc(userDoc);
+  if (userSnap.exists()) {
+    regError.textContent = "Username sudah terdaftar.";
+    regError.style.display = "block";
+    return;
+  }
+  // Simpan hash password
+  const passwordHash = CryptoJS.SHA256(password).toString();
+  await setDoc(userDoc, { passwordHash });
+  setUsername(username, password);
+});
+
+// Login
+loginForm.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  const username = loginUsernameInput.value.trim();
+  const password = loginPasswordInput.value.trim();
+  if (!username || !password) {
+    loginError.textContent = "Username dan password wajib diisi.";
+    loginError.style.display = "block";
+    return;
+  }
+  loginError.style.display = "none";
+  const userDoc = doc(db, "users", username);
+  const userSnap = await getDoc(userDoc);
+  if (!userSnap.exists()) {
+    loginError.textContent = "Username tidak ditemukan.";
+    loginError.style.display = "block";
+    return;
+  }
+  const passwordHash = CryptoJS.SHA256(password).toString();
+  if (userSnap.data().passwordHash !== passwordHash) {
+    loginError.textContent = "Password salah.";
+    loginError.style.display = "block";
+    return;
+  }
+  setUsername(username, password);
+});
+
+// Auto login jika sudah ada di localStorage
+if (currentUsername && localStorage.getItem("chatPassword")) {
+  setUsername(currentUsername, localStorage.getItem("chatPassword"));
+} else {
+  showLoginForm();
+}
+
+// Logika chat utama, pakai username
+const checkOrCreateChatKey = async () => {
+  if (!isUsernameReady) return;
+  const peerUsername = peerIdInput.value.trim();
+  if (!peerUsername) {
+    sharedSecretKey = "";
+    chatCollection = null;
+    chatHistory.innerHTML = "";
+    return;
+  }
+  try {
+    const userNames = [currentUsername, peerUsername].sort();
+    const chatRoomId = userNames.join("_");
+    console.log("Chat Room ID:", chatRoomId);
+    // Path dokumen: artifacts/{appId}/keys/{chatRoomId}
+    const chatKeyDoc = doc(
+      db,
+      "artifacts",
+      firebaseConfig.appId,
+      "keys",
+      chatRoomId
+    );
+    const docSnap = await getDoc(chatKeyDoc);
+    if (docSnap.exists()) {
+      sharedSecretKey = docSnap.data().key;
+      console.log("Kunci obrolan ditemukan:", sharedSecretKey);
+    } else {
+      const algorithm = algorithmSelect.value;
+      const keyLength = algorithm === "AES" ? 16 : 8;
+      sharedSecretKey = generateRandomKey(keyLength);
+      await setDoc(chatKeyDoc, {
+        key: sharedSecretKey,
+        createdAt: new Date(),
+        userNames: userNames,
+      });
+      console.log("Kunci obrolan baru dibuat:", sharedSecretKey);
+    }
+    chatCollection = collection(
+      db,
+      "artifacts",
+      firebaseConfig.appId,
+      "chats",
+      chatRoomId,
+      "messages"
+    );
+    // Bersihkan chatHistory setiap kali ganti lawan chat
+    chatHistory.innerHTML = "";
+    // Subscribe realtime, tampilkan semua pesan
+    onSnapshot(query(chatCollection, orderBy("timestamp")), (snapshot) => {
+      chatHistory.innerHTML = "";
+      snapshot.forEach((doc) => {
+        const msg = doc.data();
+        const decryptedText = decryptMessage(msg.text, sharedSecretKey);
+        const type = msg.senderName === currentUsername ? "sent" : "received";
+        addMessageToChat(msg.senderName, decryptedText, type);
+      });
+    });
+  } catch (err) {
+    sharedSecretKey = "";
+    chatCollection = null;
+    chatHistory.innerHTML = "";
+    console.error("Gagal membuat/mengambil kunci obrolan:", err);
+  }
+};
+
+peerIdInput.addEventListener("input", checkOrCreateChatKey);
+sendMessageBtn.addEventListener("click", sendMessage);
+
 async function sendMessage() {
   const message = messageInput.value.trim();
-  const peerId = peerIdInput.value.trim();
-  if (!message || !peerId) {
-    alert("Pesan dan ID teman harus diisi.");
+  const peerUsername = peerIdInput.value.trim();
+  if (!message || !peerUsername) {
+    alert("Pesan dan username teman harus diisi.");
     return;
   }
   if (!sharedSecretKey || !chatCollection) {
     alert(
-      "Kunci obrolan belum disepakati atau chat belum siap. Pastikan ID Teman sudah diisi dan tunggu beberapa detik sebelum mengirim pesan."
+      "Kunci obrolan belum disepakati atau chat belum siap. Pastikan username teman sudah diisi dan tunggu beberapa detik sebelum mengirim pesan."
     );
     return;
   }
@@ -154,7 +323,7 @@ async function sendMessage() {
   if (!encryptedMessage) return;
   try {
     await addDoc(chatCollection, {
-      senderId: currentUserId,
+      senderName: currentUsername,
       text: encryptedMessage,
       timestamp: new Date(),
     });
@@ -163,81 +332,3 @@ async function sendMessage() {
     console.error("Error adding document: ", e);
   }
 }
-
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUserId = user.uid;
-    userIdDisplay.textContent = currentUserId;
-    const checkOrCreateChatKey = async () => {
-      const peerId = peerIdInput.value.trim();
-      if (!peerId) {
-        sharedSecretKey = "";
-        chatCollection = null;
-        chatHistory.innerHTML = "";
-        return;
-      }
-      try {
-        const userIds = [currentUserId, peerId].sort();
-        const chatRoomId = userIds.join("_");
-        console.log("Chat Room ID:", chatRoomId);
-        // Path dokumen: artifacts/{appId}/keys/{chatRoomId}
-        const chatKeyDoc = doc(
-          db,
-          "artifacts",
-          firebaseConfig.appId,
-          "keys",
-          chatRoomId
-        );
-        const docSnap = await getDoc(chatKeyDoc);
-        if (docSnap.exists()) {
-          sharedSecretKey = docSnap.data().key;
-          console.log("Kunci obrolan ditemukan:", sharedSecretKey);
-        } else {
-          const algorithm = algorithmSelect.value;
-          const keyLength = algorithm === "AES" ? 16 : 8;
-          sharedSecretKey = generateRandomKey(keyLength);
-          await setDoc(chatKeyDoc, {
-            key: sharedSecretKey,
-            createdAt: new Date(),
-            userIds: userIds,
-          });
-          console.log("Kunci obrolan baru dibuat:", sharedSecretKey);
-        }
-        chatCollection = collection(
-          db,
-          "artifacts",
-          firebaseConfig.appId,
-          "chats",
-          chatRoomId,
-          "messages"
-        );
-        // Bersihkan chatHistory setiap kali ganti lawan chat
-        chatHistory.innerHTML = "";
-        // Subscribe realtime, tampilkan semua pesan
-        onSnapshot(query(chatCollection, orderBy("timestamp")), (snapshot) => {
-          chatHistory.innerHTML = "";
-          snapshot.forEach((doc) => {
-            const msg = doc.data();
-            const decryptedText = decryptMessage(msg.text, sharedSecretKey);
-            const type = msg.senderId === currentUserId ? "sent" : "received";
-            addMessageToChat(msg.senderId, decryptedText, type);
-          });
-        });
-      } catch (err) {
-        sharedSecretKey = "";
-        chatCollection = null;
-        chatHistory.innerHTML = "";
-        console.error("Gagal membuat/mengambil kunci obrolan:", err);
-      }
-    };
-    peerIdInput.addEventListener("input", checkOrCreateChatKey);
-    sendMessageBtn.addEventListener("click", sendMessage);
-  } else {
-    try {
-      await signInAnonymously(auth);
-    } catch (err) {
-      userIdDisplay.textContent = "Gagal login: " + err.message;
-      console.error("Firebase Auth Error:", err);
-    }
-  }
-});
